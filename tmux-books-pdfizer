@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+# pdf_books.sh - Search PDFs in personal/books only
+source "$(dirname "$0")/pdf_common_zathura.sh"
+
+# Use fzf to find and select a PDF file from personal/books only
+pdf_file=$(find ~/personal/books -mindepth 1 -maxdepth 5 -type f -name "*.pdf" | sort | fzf)
+
+# Exit if no PDF is selected
+if [[ -z $pdf_file ]]; then
+    exit 0
+fi
+
+# Get the session name based on the PDF file's name (without extension)
+selected_name=$(basename "$pdf_file" .pdf | tr . _)
+
+# Handle the PDF session
+handle_pdf_session "$selected_name" "$pdf_file"

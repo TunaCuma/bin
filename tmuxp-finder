@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+# Find a project directory using fzf and create a tmuxp session for it
+
+if [[ $# -eq 1 ]]; then
+    selected=$1
+else
+    selected=$(find ~/work/builds ~/projects ~/ ~/work ~/personal -mindepth 1 -maxdepth 4 -type d | fzf)
+fi
+
+if [[ -z $selected ]]; then
+    exit 0
+fi
+
+selected_name=$(basename "$selected" | tr . _)
+tmux_running=$(pgrep tmux)
+
+# Create a temporary tmuxp config file
+temp_config=$(mktemp)
+
+# Create a basic tmuxp config
+cat > "$temp_config" << EOCFG
+session_name: $selected_name
+start_directory: $selected
+windows:
+  - window_name: nvim
+    panes:
+      - nvim
+EOCFG
+
+# Load the session using tmuxp
+if [[ -z $TMUX ]] && [[ -z $tmux_running ]]; then
+    tmuxp load "$temp_config"
+elif [[ -z $TMUX ]] && [[ -n $tmux_running ]]; then
+    tmuxp load "$temp_config"
+else
+    tmuxp load "$temp_config"
+fi
+
+# Clean up
+rm "$temp_config"
