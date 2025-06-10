@@ -1,0 +1,6 @@
+#!/bin/bash
+
+for file in *.pdf; do
+    pages=$(pdfinfo "$file" 2>/dev/null | grep "Pages:" | awk '{print $2}')
+    printf "%-40s %s pages\n" "$file" "$pages"
+done

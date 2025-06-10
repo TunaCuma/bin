@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+
+REMIND_FILE=~/.local/bin/assets/remind_birthdays.rem
+
+# Get today's date
+TODAY=$(date +"%Y/%m/%d")
+
+# Extract upcoming messages (-t7) and all reminders with dates (-n)
+upcoming=$(remind -t7 "$REMIND_FILE" | grep -v '^$') # Exclude empty lines
+all_reminders=$(remind -n "$REMIND_FILE")
+
+# Function to calculate days left
+days_left() {
+    local target_date=$1
+    echo $(( ( $(date -d "$target_date" +%s) - $(date -d "$TODAY" +%s) ) / 86400 ))
+}
+
+output="Welcome boss,\n"
+
+# Prepare output with dates for upcoming reminders
+if [[ -z "$upcoming" || "$upcoming" == "No reminders." ]]; then
+    # If no reminders in the next 7 days, find the closest future reminder
+    closest=$(echo "$all_reminders" | sort -n | head -n 1)
+    if [[ -n "$closest" ]]; then
+        closest_date=$(echo "$closest" | awk '{print $1}')
+        closest_message=$(echo "$closest" | cut -d' ' -f2-)
+        days=$(days_left "$closest_date")
+        output+="No birthdays in the next 7 days.\n\nClosest Birthday: $closest_message\nDate: $closest_date ($days days left)"
+    else
+        output+="No birthdays found in the reminder file."
+    fi
+else
+    output+="Upcoming Birthdays in the next 7 days:\n"
+    reminders=""
+    while IFS= read -r line; do
+        # Filter out "Reminders for ..." lines
+        if [[ ! "$line" =~ Reminders\ for ]]; then
+            # Find the date for each message in `-t7` output by matching with `-n` output
+            message=$(echo "$line" | sed 's/^[ \t]*//;s/[ \t]*$//')
+            if [[ -n "$message" ]]; then
+                date=$(echo "$all_reminders" | grep -F "$message" | awk '{print $1}')
+                days=$(days_left "$date")
+                if [[ days -eq 0 ]]; then
+                    reminders+="$date $message Today!\n"
+                else
+                    reminders+="$date $message ($days days left)\n"
+                fi
+            fi
+        fi
+    done <<< "$upcoming"
+
+    # Sort reminders by date
+    reminders=$(echo -e "$reminders" | sort)
+
+    # Append sorted reminders to the output
+    output+="$reminders"
+fi
+
+# Output everything in one cowsay
+echo -e "$output" | cowsay -n | awk '{printf "%*s\n", (COLUMNS+length($0))/2, $0}'

@@ -1,0 +1,134 @@
+#!/bin/bash
+
+# Default threshold (0 means no highlighting)
+THRESHOLD=0
+
+# Default file extensions to count
+EXTENSIONS=("py" "js" "jsx" "ts" "tsx" "java")
+
+# Check if an argument was provided for threshold
+if [[ $1 =~ ^-([0-9]+)$ ]]; then
+    THRESHOLD=${BASH_REMATCH[1]}
+    shift
+fi
+
+# ANSI color codes
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# Function to check if a file should be ignored based on gitignore patterns
+should_ignore() {
+    local file="$1"
+    local rel_path="${file#./}"  # Remove leading ./ if present
+    
+    # Always ignore these directories
+    if [[ "$file" == *"/node_modules/"* || 
+          "$file" == *"/__pycache__/"* || 
+          "$file" == *"/venv/"* ||
+          "$file" == *"/build/"* ||
+          "$file" == *"/dist/"* ]]; then
+        return 0  # True, should ignore
+    fi
+    
+    # Check if .gitignore exists and use git check-ignore
+    if [ -f ".gitignore" ] && command -v git >/dev/null 2>&1; then
+        if git check-ignore -q "$rel_path" 2>/dev/null; then
+            return 0  # True, should ignore
+        fi
+    fi
+    
+    return 1  # False, should not ignore
+}
+
+# Function to check if file has one of our target extensions
+has_target_extension() {
+    local file="$1"
+    local extension="${file##*.}"
+    
+    for ext in "${EXTENSIONS[@]}"; do
+        if [[ "$extension" == "$ext" ]]; then
+            return 0  # True, has target extension
+        fi
+    done
+    
+    return 1  # False, doesn't have target extension
+}
+
+# Function to display a file with its line count
+display_with_count() {
+    local file="$1"
+    local prefix="$2"
+    local base_name=$(basename "$file")
+    
+    if has_target_extension "$file"; then
+        local count=$(wc -l < "$file")
+        
+        if [ $THRESHOLD -gt 0 ] && [ $count -gt $THRESHOLD ]; then
+            echo -e "$prefix$base_name (${RED}$count lines${NC})"
+        else
+            echo "$prefix$base_name ($count lines)"
+        fi
+    else
+        echo "$prefix$base_name"
+    fi
+}
+
+# Function to process a directory
+process_dir() {
+    local dir="$1"
+    local prefix="$2"
+    
+    # Get all visible files and directories
+    local items=()
+    while IFS= read -r -d $'\0' item; do
+        if ! should_ignore "$item"; then
+            items+=("$item")
+        fi
+    done < <(find "$dir" -mindepth 1 -maxdepth 1 -not -path "*/\.*" -print0 | sort -z)
+    
+    local last_index=$(( ${#items[@]} - 1 ))
+    
+    for i in "${!items[@]}"; do
+        local item="${items[$i]}"
+        local base_name=$(basename "$item")
+        
+        # Prepare the correct prefix for the current item
+        local new_prefix
+        if [ $i -eq $last_index ]; then
+            new_prefix="$prefix└── "
+            next_prefix="$prefix    "
+        else
+            new_prefix="$prefix├── "
+            next_prefix="$prefix│   "
+        fi
+        
+        if [ -d "$item" ]; then
+            echo "$new_prefix$base_name"
+            process_dir "$item" "$next_prefix"
+        else
+            display_with_count "$item" "$new_prefix"
+        fi
+    done
+}
+
+# Print usage info if help flag is provided
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+    echo "Usage: $0 [-N] [ext1,ext2,...]"
+    echo "  -N              Highlight files with more than N lines of code in red"
+    echo "  ext1,ext2,...   Comma-separated list of file extensions to count (default: py,js,jsx,ts,tsx)"
+    echo ""
+    echo "Examples:"
+    echo "  $0 -100         (highlights files with more than 100 lines)"
+    echo "  $0 py,java,cpp  (only count Python, Java and C++ files)"
+    echo "  $0 -50 py,rb    (highlight Python and Ruby files with more than 50 lines)"
+    exit 0
+fi
+
+# Check if custom extensions were provided
+if [[ $1 == ?*,?* ]]; then
+    IFS=',' read -ra EXTENSIONS <<< "$1"
+fi
+
+# Start the tree display
+echo "."
+process_dir "." ""
