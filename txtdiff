@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+# Use the script to paste, and save to temporary files
+echo "Paste first text, then CTRL-D:"
+cat > /tmp/text1.txt
+echo "Paste second text, then CTRL-D:"
+cat > /tmp/text2.txt
+
+# Then run:
+nvim -d /tmp/text1.txt /tmp/text2.txt

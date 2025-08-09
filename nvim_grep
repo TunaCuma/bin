@@ -1,0 +1,11 @@
+nvim_grep() {
+  local pattern=$1
+  shift
+  # Use arrays to handle spaces/newlines
+  mapfile -d '' files < <(git ls-files --others --cached --exclude-standard -z | grep -zv 'test' | xargs -0 grep -lZ -- "$pattern")
+  if (( ${#files[@]} == 0 )); then
+    echo "No matches"
+    return 1
+  fi
+  nvim +"silent! /$pattern" "${files[@]}" "$@"
+}
